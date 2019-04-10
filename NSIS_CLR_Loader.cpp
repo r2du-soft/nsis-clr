@@ -7,57 +7,56 @@ using namespace System::Collections::Generic;
 using namespace System::IO;
 using namespace System::Reflection;
 
+
 HINSTANCE g_hInstance;
 HWND g_hwndParent;
 
-System::Reflection::Assembly ^ LoadAssembly(String ^filename)
+
+ref struct MyData
 {
-	Assembly ^assembly = nullptr;
-	FileStream ^fs = File::Open(filename, FileMode::Open);
-	if (fs != nullptr)
+	static Dictionary<String^, Assembly^>^ loaded_assemblies = gcnew Dictionary<String^, Assembly^>(StringComparer::InvariantCultureIgnoreCase);
+};
+
+System::Reflection::Assembly^ LoadAssembly(String^ filename)
+{
+	Assembly^ assembly = nullptr;
+	if (!MyData::loaded_assemblies->TryGetValue(filename, assembly))
 	{
-		MemoryStream ^ms = gcnew MemoryStream();
-		if (ms != nullptr)
+		FileStream ^fs = File::Open(filename, FileMode::Open);
+		if (fs != nullptr)
 		{
-			cli::array<unsigned char> ^buffer = gcnew cli::array<unsigned char>(1024);
-			int read = 0;
-			while ((read = fs->Read(buffer, 0, 1024))>0)
-				ms->Write(buffer, 0, read);
-			assembly = Assembly::Load(ms->ToArray());
-			ms->Close();
-			delete ms;
+			MemoryStream ^ms = gcnew MemoryStream();
+			if (ms != nullptr)
+			{
+				cli::array<unsigned char> ^buffer = gcnew cli::array<unsigned char>(1024);
+				int read = 0;
+				while ((read = fs->Read(buffer, 0, 1024))>0)
+					ms->Write(buffer, 0, read);
+				assembly = Assembly::Load(ms->ToArray());
+				ms->Close();
+				delete ms;
+			}
+			fs->Close();
+			delete fs;
 		}
-		fs->Close();
-		delete fs;
+		MyData::loaded_assemblies->Add(filename, assembly);
 	}
-
 	return assembly;
-
-	//http://forums.msdn.microsoft.com/en-US/clr/thread/093c3606-e68e-46f4-98a1-f2396d3f88ca/
 }
 
-char* CallCLR(string DllName, string ClassWithNamespace, string MethodName, vector<string> Args, bool loadInMemory)
+char* CallCLR(string DllName, string ClassWithNamespace, string MethodName, vector<string> Args)
 {
 	try
 	{
 		// get DLLName, Namespace, Class and Method
 		String ^sDLLName = (gcnew String(DllName.c_str()))->Trim();
-		if (!(sDLLName->ToLower()->EndsWith(".dll") || sDLLName->ToLower()->EndsWith(".exe")))
+		if (!sDLLName->ToLower()->EndsWith(".dll"))
 			sDLLName += ".dll";
 		String ^sClassWithNamespace = (gcnew String(ClassWithNamespace.c_str()))->Trim();
 		String ^sMethod = (gcnew String(MethodName.c_str()))->Trim();
 
 		// load assembly (is closed on disk right away)
-		System::Reflection::Assembly ^assembly;
-		
-		if (loadInMemory)
-		{
-			assembly = LoadAssembly(".\\" + sDLLName);
-		}
-		else
-		{
-			assembly = System::Reflection::Assembly::LoadFrom(".\\" + sDLLName);
-		}
+		System::Reflection::Assembly ^assembly = LoadAssembly(".\\" + sDLLName);
 		if (assembly == nullptr)
 			throw gcnew Exception("Error loading .NET assembly");
 
@@ -130,7 +129,7 @@ char* CallCLR(string DllName, string ClassWithNamespace, string MethodName, vect
 				delete sMethod;
 				delete params;
 				assembly = nullptr;
-				delete assembly;
+				//delete assembly;
 				delete instance;
 				delete methodinfo;
 				/*if (retValue != nullptr)
@@ -147,55 +146,37 @@ char* CallCLR(string DllName, string ClassWithNamespace, string MethodName, vect
 				sClassWithNamespace, sDLLName));
 		}
 
+
+		//Console::WriteLine(String::Format("Memory used before collection:{0:N0",GC::GetTotalMemory(false)));
+		//throw gcnew Exception(String::Format("Memory used before collection:{0:N0", GC::GetTotalMemory(false)));
+		//-----------
+		GC::Collect();
+		//-----------
+		//Console::WriteLine(String::Format("Memory used after full collection:{0:N0",GC::GetTotalMemory(true)));
+		//throw gcnew Exception(String::Format("Memory used after full collection:{0:N0", GC::GetTotalMemory(true)));
+		//-----------
+
+
 		return "";
 	}
 	catch (System::Exception ^ex)
 	{
-		String ^msg = "Error calling .NET DLL method\n\n" + ex->Message + "\n\n" + ex->StackTrace ;
+		String ^msg = "Error calling .NET DLL method\n\n" + ex->Message;
 		Windows::Forms::MessageBox::Show(msg);
+
+
+		//Console::WriteLine(String::Format("Memory used before collection:{0:N0",GC::GetTotalMemory(false)));
+		//throw gcnew Exception(String::Format("Memory used before collection:{0:N0", GC::GetTotalMemory(false)));
+		//-----------
+		GC::Collect();
+		//-----------
+		//Console::WriteLine(String::Format("Memory used after full collection:{0:N0",GC::GetTotalMemory(true)));
+		//throw gcnew Exception(String::Format("Memory used after full collection:{0:N0", GC::GetTotalMemory(true)));
+		//-----------
+
+
 		return "";
 	}
-}
-
-extern "C" __declspec(dllexport) void CallMemory(HWND hwndParent, int string_size, 
-                                      char *variables, stack_t **stacktop,
-                                      extra_parameters *extra)
-{
-	// expected parameters:
-	// filename.dll, namespace.namespace...class, method, numparams, params...
-
-	g_hwndParent=hwndParent;
-	EXDLL_INIT();
-
-	char buf[1024];
-
-	// filename.dll
-	popstring(buf);
-	string dllname = string(buf);
-
-	// namespace and class
-	popstring(buf);
-	string classwithnamespace = string(buf);
-
-	// method
-	popstring(buf);
-	string method = string(buf);
-
-	// num params
-	popstring(buf);
-	int numparams = atoi(buf);
-
-	// params
-	vector<string> args;
-	for (int i=0; i<numparams; i++)
-	{
-		popstring(buf);
-		string tmp = string(buf);
-		args.push_back(tmp);
-	}
-	
-	char* result = (char*)CallCLR(dllname, classwithnamespace, method, args, true);
-	pushstring(result);
 }
 
 extern "C" __declspec(dllexport) void Call(HWND hwndParent, int string_size, 
@@ -235,18 +216,33 @@ extern "C" __declspec(dllexport) void Call(HWND hwndParent, int string_size,
 		args.push_back(tmp);
 	}
 	
-	char* result = (char*)CallCLR(dllname, classwithnamespace, method, args, false);
+
+	char* result = (char*)CallCLR(dllname, classwithnamespace, method, args);
+
+
+	//Console::WriteLine(String::Format("Memory used before collection:{0:N0",GC::GetTotalMemory(false)));
+	//throw gcnew Exception(String::Format("Memory used before collection:{0:N0", GC::GetTotalMemory(false)));
+	//-----------
+	GC::Collect();
+	//-----------
+	//Console::WriteLine(String::Format("Memory used after full collection:{0:N0",GC::GetTotalMemory(true)));
+	//throw gcnew Exception(String::Format("Memory used after full collection:{0:N0", GC::GetTotalMemory(true)));
+	//-----------
+
 	pushstring(result);
+
 }
 
-extern "C" __declspec(dllexport) void Destroy(HWND hwndParent, int string_size, 
-                                      char *variables, stack_t **stacktop,
-                                      extra_parameters *extra)
+/*
+extern "C" __declspec(dllexport) void Destroy(HWND hwndParent, int string_size,
+	char *variables, stack_t **stacktop,
+	extra_parameters *extra)
 {
 }
+*/
+
 
 //#pragma unmanaged
-// Upgrade to Hosted CLR => http://msdn.microsoft.com/en-us/magazine/cc163567.aspx
 //BOOL WINAPI DllMain(HANDLE hInst, ULONG ul_reason_for_call, LPVOID lpReserved)
 //{
 //	g_hInstance=(HINSTANCE)hInst;
