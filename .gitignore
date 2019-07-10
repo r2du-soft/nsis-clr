@@ -1,3 +1,4 @@
+.vs
 *.ncb
 *.suo
 obj/
@@ -5,3 +6,9 @@ _UpgradeReport_Files/
 *.user
 *.old
 /UpgradeLog.XML
+*.asm
+*.obj
+*.APS
+*.pdb
+*.tlog
+*.metagen
