@@ -1,3 +1,8 @@
+# Version 1.2:
+- Build with Visual Studio 2019 Professional On Windows 10 x64
+- Moved to .NET 4.x, there are no Microsoft supported Window versions that cannot support .NET 4.x any longer
+- Added reference to System.Web.Services to allow for interfacing with DLLs that support 
+
 # Version 1.1:
 - Build with Visual Studio 2005 SP1 Professional On Windows 7 SP1 x86
 - Solve a problem that does not work on some windows (Change compile settings and use from lower .net framework (net 2.0))
