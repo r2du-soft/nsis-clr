@@ -1,4 +1,4 @@
-# Version 1.2:
+# Version 1.1.1:
 - Build with Visual Studio 2019 Professional On Windows 10 x64
 - Moved to .NET 4.x, there are no Microsoft supported Window versions that cannot support .NET 4.x any longer
 - Added reference to System.Web.Services to allow for interfacing with DLLs that support 
